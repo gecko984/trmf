@@ -63,13 +63,14 @@ this program comes with a dataset of cryptocurrencies exchanges rate, you can [d
 The files are in a rather peculiar format, you can `converter.py` script, included in this repo, to convert these files to CSV and combine a set of columns from different files into a single file. The script is written in Python 3 and requies Pandas.
 
 Usage:
-`converter.py -i file_with_list -o output_file_name -b begin_datetime -e end_datetime -c columns_list`
+`converter.py -i file_with_list -o output_file_name -b begin_datetime -e end_datetime -c columns_list`-s standardize
 
 * `-i file_with_list` - path to a file containing paths to the files that you want to include un the table. An example is of such file is included, it will work if `data` directory is in the same directory that yor executive file is.
 * `-b begin_datetime` the time moment you want to start your dataset to start with. If cone cof the files doesnt cover this moment it will be excluded from the result and a corresponding message will be printed. THe datetime should be in the format
  `yyyy.mm.dd.hh.mm.ss`. 
 * `-e end_datetime`. Same format as above, if the moment isnt covered, the file will be excluded.
 * `-c columns_list`. Column names that you want to include, separated by spaces. For example, `O C` .
+* `-s` - add this flag if you want to standardize every time series (useful mostly for vizualization purposes)
 
 Example:
 `-i file_list -o converted.csv -b 2016.12.29.00.00.00 -e 2018.02.01.00.00.00 -c O C`
@@ -117,4 +118,24 @@ Here's an example of factorization of 101 time series from the dataset, with ran
 
 Note that missing values are handled quite gracefully.
 
+Same but twice the rank (32)
 
+![](https://i.imgur.com/N4vhUH9.png)
+
+
+
+For forecasting, a series of grid searches was performed for regularization parameters, according to the following procedure:
+* chop some number of right columns off from the dataset;
+* chooze `horizon` value, usually 8;
+* consider the last `horizon` of the remaining dataset unknown, predict for different combination of hyperparameters;
+* measure RMSE between actual and predicted values.
+
+The results were more or ledd inconclusive, as both coefficient sets and the resulting RMSEs variedwildly,depending what part of the dataset was used as unknown. But mostly the following combination fared quite well:
+
+`lambda_x: 100000;	 lambda_w: 100;	 lambda_f: 1; eta: 0.001;`
+
+On the other hand, RMSE for totally different values
+
+`lambda_x: 0.001;	 lambda_w: 0.001;	 lambda_f: 1; eta: 0.0001;` weren't that different from those for the values above. 
+
+The question of hyperparameters choice needs more research, which we don't have time for, unfortunately.
