@@ -785,7 +785,6 @@ bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_f
     while (std::getline(iss, lag, ',')) {
         lags_set->insert(std::stoi(lag));
     }
-    *match = true;
     return true;
 }
 
