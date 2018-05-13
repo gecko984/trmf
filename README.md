@@ -34,7 +34,7 @@ The optimization is done by alternately optimizing for `X`, `W` and `F`. For eac
 
 ## Installing
 
-Just clone the repository and run `make`. 
+Just clone the repository and run `make` in the directory with the source files. 
 
 
 ## Usage
@@ -57,7 +57,7 @@ The resulting matrix is saved in CSV format again, each line corresponding to on
 
 ## Getting data
 
-this program comes with a dataset of cryptocurrencies exchanges rate, you can [download it here](https://drive.google.com/file/d/1qDxtI_sPWtIwhuJq92_1-3cv7ecJmsD0/view?usp=sharing).
+this program comes with a dataset of cryptocurrencies exchanges rate, you can [download it here](https://drive.google.com/file/d/1qDxtI_sPWtIwhuJq92_1-3cv7ecJmsD0/view?usp=sharing). Put the `data` firectory in the same location where the executive file is.
 
 The files are in a rather peculiar format, you can `converter.py` script, included in this repo, to convert these files to CSV and combine a set of columns from different files into a single file. The script is written in Python 3 and requies Pandas.
 
@@ -74,8 +74,27 @@ Example:
 `-i file_list -o converted.csv -b 2016.12.29.00.00.00 -e 2018.02.01.00.00.00 -c O C`
 
 
+######################################################################################################3
 
+# Report
 
+## Implementation details
 
+The following main subroutines were developed:
+
+* Two versions of Ridge Regression for the `W`-step, one based on SVD an another on the Cholesky decomposition. The two functions appear to have similar perfomance, but Cholesky should be faster in theory, so it was used in the end.
+
+* Two versions of the `X`-step (solvedusing the Conjugate Gradients algorithm), one dense and one sparse. For the moderately sized data we have, the dense routines proved to be faster by a factor of about 2, but the sparse routines are left as an option that can be necessary for bigger data.  To switch to sparse version, `-s` flag is used. 
+
+* `F`-step aka coordinate descent algorithm.
+
+The program works as follows:
+
+1. The data is loaded into a Eigen Matrix. Any value in the file that can't be converted to a `double` with `std::stod()` is seen as a missing value, and the missing mask `Omega` is filled simultaneously with `Y`. 
+2. Every row of matrix Y is standardized, with scales asshifts remembered for future inverse transformation.
+3. The data matrix is elementwise multiplied by the mask Omega, so the missing values are set to zero. This is necessary for correct work of the X-stepm although the autors fail to mention that in their paper).
+2. First approximations for `F` and `X` are obtained with a simple SVD decomposition.
+3. The iterations are run, starting with an `W`-step, until the mean squared difference in the elements of `X` are less than  a hard value 0.0001, but no more than 20 iterations (an 'iteration' meaning the whole three steps).
+4. The values fot `horizon` time steps are predicted using the autoregression model.
 
 
