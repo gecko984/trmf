@@ -51,11 +51,11 @@ template<class T>
 void PrintFunction(T object);
 void ReadCSV(char* filename, char delimeter, Mat& Y, Arr& Omega);
 bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_file_name, char* delimeter, int* rank,
-                 int* horizon, std::set<int>* lags_set, bool* sparse, bool* keep_big, double* lambda_x, double* lambda_w, double* lambda_f, double* eta);
+                 int* horizon, bool* match, std::set<int>* lags_set, bool* sparse, bool* keep_big, double* lambda_x, double* lambda_w, double* lambda_f, double* eta);
 Mat GenerateOmega(int rows, int cols, double p_missing);
 void TestMatchByColumns();
 
-void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, double lambda_f, double lambda_w, double lambda_x, double eta,
+void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, bool match, double lambda_f, double lambda_w, double lambda_x, double eta,
                double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, bool keep_big, Mat& F, Mat& X, Mat& W);
 
 int Run(int argc, char* argv[]);
@@ -83,11 +83,11 @@ int Run(int argc, char* argv[]) {
     int rank, horizon;
     bool sparse = false;
     bool keep_big = false;
+    bool match = false;
     double lambda_x=1, lambda_w=1, lambda_f=1, eta=1;
 
     std::set<int> lags_set;
-    ParseParams(argc, argv, &input_file_name, &output_file_name, &delimeter, &rank, &horizon, &lags_set, &sparse, &keep_big, &lambda_x, &lambda_w, &lambda_f, &eta);
-
+    ParseParams(argc, argv, &input_file_name, &output_file_name, &delimeter, &rank, &horizon, &match, &lags_set, &sparse, &keep_big, &lambda_x, &lambda_w, &lambda_f, &eta);
     Mat Y;
     Arr Omega;
     ReadCSV(input_file_name, ',', Y, Omega);
@@ -95,8 +95,8 @@ int Run(int argc, char* argv[]) {
     int n = Y.rows();
     int T = Y.cols();
 
-    double epsilon_X = 0.00001;
-    double epsilon_F = 0.00001;
+    double epsilon_X = 0.0001;
+    double epsilon_F = 0.0001;
     int max_iter_X = 10;
     int max_iter_F = 10;
     int max_global_iter = 20;
@@ -107,9 +107,11 @@ int Run(int argc, char* argv[]) {
     Mat F(n, rank);
     Mat X(rank, T-horizon);
     Mat W(rank, lags_set.size());
-
-    Forecast(Y_pred, Omega_part, lags_set, rank, horizon, lambda_f, lambda_w, lambda_x, eta, epsilon_X, epsilon_F,
+    Forecast(Y_pred, Omega_part, lags_set, rank, horizon, match, lambda_f, lambda_w, lambda_x, eta, epsilon_X, epsilon_F,
              max_iter_X, max_iter_F, max_global_iter, sparse, keep_big, F, X, W);
+
+    Vec means, scales; // DELETE ME
+    Standardize(Y, &means, &scales); // DELETE ME
 
     std::ofstream file("bob.csv");
     file << Y.format(CSVFormat);
@@ -122,7 +124,7 @@ int Run(int argc, char* argv[]) {
 }
 
 
-void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, double lambda_f, double lambda_w, double lambda_x, double eta,
+void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, bool match, double lambda_f, double lambda_w, double lambda_x, double eta,
                double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, bool keep_big, Mat& F, Mat& X, Mat& W) {
 
     int n = Y.rows();
@@ -153,16 +155,17 @@ void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank,
         }
     }
 
+
     if(keep_big) {
         Y = F * X;
-        MatchByColumn(reference_column, Y, T-1);
+        if(match) MatchByColumn(reference_column, Y, T-1);
     } else {
         Mat X_pred = X.rightCols(horizon+1);
         Y = F * X_pred;
-        MatchByColumn(reference_column, Y, 0);
+        if(match) MatchByColumn(reference_column, Y, 0);
         Y = Y.rightCols(horizon);
     }
-    Destandardize(means, scales, Y);
+    //Destandardize(means, scales, Y); //UNCOMMENT ME
 }
 
 
@@ -728,12 +731,12 @@ void ReadCSV(char* filename, char delimeter, Mat& Y, Arr& Omega) {
 }
 
 
-bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_file_name, char* delimeter, int* rank, int* horizon,
+bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_file_name, char* delimeter, int* rank, int* horizon, bool* match,
                  std::set<int>* lags_set, bool* sparse, bool* keep_big, double* lambda_x, double* lambda_w, double* lambda_f, double* eta) {
     char* lags;
     int c;
     // input, output, file format, delimeter, rank, horizon, sparse, lambda_x, lambda_w, lambda_f, lambda_e
-    while( ( c = getopt(argc, argv, "i:o:d:k:l:z:sbx:w:f:e:") ) != -1 ) {
+    while( ( c = getopt(argc, argv, "i:o:d:k:l:z:smbx:w:f:e:") ) != -1 ) {
         switch(c) {
             case 'i':
                 *input_file_name = optarg;
@@ -752,6 +755,9 @@ bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_f
                 break;
             case 'z':
                 if(optarg) *horizon = atoi(optarg);
+                break;
+             case 'm':
+                *match = true;
                 break;
             case 's':
                 *sparse = true;
@@ -779,6 +785,7 @@ bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_f
     while (std::getline(iss, lag, ',')) {
         lags_set->insert(std::stoi(lag));
     }
+    *match = true;
     return true;
 }
 
