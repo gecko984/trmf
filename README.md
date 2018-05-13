@@ -38,13 +38,14 @@ Just clone the repository and run `make` in the directory with the source files.
 
 
 ## Usage
-`./tmrf -i input_file -o prediction_file -d delimeter -k rank -h horizon -l lags_set -s (if you want to use sparse algorithm) -b (if you want the program to to output the big recovered matrix rather than just the predicted values) -x lambda_x -w lambda_w -f lambda_f -e eta`
+`./tmrf -i input_file -o prediction_file -d delimeter -k rank -z horizon -l lags_set -s (if you want to use sparse algorithm) -m (if you want to match predicted series to last known values of true series) -b (if you want the program to to output the big recovered matrix rather than just the predicted values) -x lambda_x -w lambda_w -f lambda_f -e eta`
 
 * `-i input_file` - location of the input file. The file should be in CSV format with one line corresponding to one time series. Missing values can be marked by any non-numeric sequence of caracters, for example `NaN`, `#nan` or `bob`;
 * `-o prediction_file` - where to write the predictions;
 * `-d delimeter` - a character separatimg the values in the input file. For example `-d ,`;
 * `-k rank` - rank of the factorization;
-* `-h horizon` - how many time ticks you want to predict;
+* `-z horizon` - how many time ticks you want to predict;
+* `-m` - if you want to shift the predicted part to series, so that they match the terminal values in data. Recommended for prediction.
 * `-l lags_set` - the lags you want to include into the autoregressive model, separated by comma (no spaces in between). For example, `-l 1,2,7`
 * `-s` - with this flag, sparse matrices are used in the `X` - step. Optimizing for `X` requires solving a system of linear equations with a `T x T`, so if your `T` (number of time ticks in data) is huge, you should use this flag to avoid memory errors. But if `T` is moderate (say, in the hundreds or first thousands), you're better of using dense matrices, because they work faster, so don't use this flag. Note, that if your lag set is'nt very big, there's probably no point in using very large T, as the temporal model is quite primitive and doesn't need too much data to train.
 * `-b` - with this flag, the output matrix include the recovered values for Y, so the shape of output will be `n x (T + horizon)`; without this flag only the predictd values are output and so the shape will be  `n x horizon`;
@@ -73,6 +74,10 @@ Usage:
 Example:
 `-i file_list -o converted.csv -b 2016.12.29.00.00.00 -e 2018.02.01.00.00.00 -c O C`
 
+This will produce three files:
+*`converted.csv` - the data matrix per se, where each row is a time series;
+* `converted_series_csv` - the row index (which row corresponds to which series from which file)
+* `converted_time.csv` - the columns index (which column coressponds to which moment in time) 
 
 ######################################################################################################3
 
@@ -91,10 +96,25 @@ The following main subroutines were developed:
 The program works as follows:
 
 1. The data is loaded into a Eigen Matrix. Any value in the file that can't be converted to a `double` with `std::stod()` is seen as a missing value, and the missing mask `Omega` is filled simultaneously with `Y`. 
-2. Every row of matrix Y is standardized, with scales asshifts remembered for future inverse transformation.
+2. Every row of matrix Y is standardized, with scales and shifts stored for future inverse transformation.
 3. The data matrix is elementwise multiplied by the mask Omega, so the missing values are set to zero. This is necessary for correct work of the X-stepm although the autors fail to mention that in their paper).
 2. First approximations for `F` and `X` are obtained with a simple SVD decomposition.
 3. The iterations are run, starting with an `W`-step, until the mean squared difference in the elements of `X` are less than  a hard value 0.0001, but no more than 20 iterations (an 'iteration' meaning the whole three steps).
-4. The values fot `horizon` time steps are predicted using the autoregression model.
+5. The values in X for `horizon` time steps are predicted using the autoregression model. 
+6. If the flag `-b` was used, `F` is multiplied by the whole matrix `X` to obtain a `n x (T+horizon)` reconstruction and prediction matrix, otherwise `F` is multiplied by the predicted part of `X` (the `horizon` right columns).
+7. The matrix factorization approach to forecasting doesnt guarantee that the predicted values start where the known values end. This is solvedby simply shifting all the reconstucted series, so that value at last time tick from data match.
+8. The data is scaled and shifted back to original scale using the previously stored scales and shifts.
+
+## Experiments
+
+The natural question to consider, is of course, the choice of regularization coefficients. As it appears, the choice of the regularization depends on the problem that we a trying to solve with the factorization. 
+
+Suppose we just want to get a low-dimensional representation of our data, without the need to forecast or impute anything.
+
+Here's an example of factorization of 101 time series from the dataset, with rank 16, lambda_x 0.01 lambda_w 0.01 lambda_f 0.001, eta 1.0. Here the last known value matching is disabled.
+
+![](https://i.imgur.com/1xa3nQC.png)
+
+Note that missing values are handled quite gracefully.
 
 
