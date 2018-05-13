@@ -1,8 +1,5 @@
-import numpy as np
 import pandas as pd
 import datetime
-import os
-import sys
 import argparse
 
 
@@ -55,7 +52,8 @@ with open(input_fname) as infile:
         if i == 0:
             big_table = data
         else:
-            big_table = pd.merge(big_table, data.copy(), how='outer', left_index=True, right_index=True)
+            big_table = pd.merge(big_table, data.copy(), how='outer',
+                                 left_index=True, right_index=True)
         
         
 for col in big_table.columns:
@@ -66,31 +64,8 @@ big_table.T.to_csv(output_fname, na_rep='NaN', header=False, index=False)
 time_index_file_name = output_fname.split('.')[0] + '_time.csv'
 big_table.index.to_series().to_csv(time_index_file_name)
 
-
-#32, 84
-
-
 index_file_name = output_fname.split('.')[0] + '_series.csv'
 pd.Series(index).to_csv(index_file_name, index=False)
 
 
 
-
-        
-#if __name__ == '__main__':
-#    main()
-'''
-            data = data[(data['T'] >= begin) & (data['T'] <= end)]
-            data.set_index('T')
-            if not time_index_saved:
-                time_index_file_name = output_fname.split('.')[0] + '_time.csv'
-                data['T'].to_csv(time_index_file_name, index=False)
-            data = data[columns]
-            data.columns = ['{}_{}'.format(colname, i)
-                            for colname in data.columns]
-            tables.append(table)
-            #if i == 84:
-            #    print(data_fname)
-            #    print(table)
-    
-'''
