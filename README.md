@@ -108,7 +108,66 @@ The program works as follows:
 
 ## Experiments
 
-The natural question to consider, is of course, the choice of regularization coefficients. As it appears, the choice of the regularization depends on the problem that we a trying to solve with the factorization. 
+The natural question to consider, is of course, the choice of regularization coefficients. Recall that there there are four of them: `lambda_w`, `lambda_f`, `lambda_x` and `eta`. One should remember that `eta` is the coefficient for the Frobenius norm of X, and this term is inside the general `X` term, which has its own coefficient `lambda_X`, so `eta` is effectively scaled by the factor of `lambda_X` The problem of choosing the right values proves to be very nontrivial, and the behaviour of factorization varies wildly depending on what the coefficients are. 
+
+A more or less complete study of this question requires more time than we actually have, but we could deduce some vagueideasof what the coefficients should be.
+
+* The higher `lambda_w`, the smoother the reconstructed/predicted ccurve is. Setting `lambda_w` >> 1000 practically amounts to having a constant prediction.
+
+* The ratio `lambda_x` /  `lambda_w` should be >> 1
+
+* `lambda_f` should be << 1
+
+Using the following parameters on the dataset with daily data for 101 currencvy pairs
+
+`rank 32; lags 1,2,3,4,5,6,7,14,21; horizon 25; lambda_x 10000;  lambda_w = 1000 lambda_f 0.01, eta 0.001`
+
+gives the following picture: ![](https://i.imgur.com/SVkE05c.png)
+
+The algorithm is trained on the data left to blue line, and then predicts 25 ticks to the right.
+
+It appears that more often than not, the algorithm can predict the general direction of the exchange rate. But it seems that it just kinda picks up the general trend and extrapolates it.
+
+But let's try to use the same values, but on a different time period of the same data:
+
+![](https://i.imgur.com/pHLL1BL.png)
+
+Now the prediction don't seem reasonable.
+
+With some random search< Ifound the following combination of parameters, that seems to work well here:
+rank 32; lags 1,2,3,4,5,6,7,14,21; horizon 25; lambda_x 100; lambda_w 10; f 0.01; eta 0.001
+
+![](https://i.imgur.com/5vPWpEB.png)
+
+Trying the same set of values on a different set of series we again obtain do
+
+![](https://i.imgur.com/T4ZeaG9.png)
+
+We tried many more parameter combinations, but the results were similarly inconclusive.
+
+Conclusion:
+
+* The TRMF is very finicky about the choice of hyperparameters. 
+
+* The TRMF is not adaptive enough for such volatile data as exchange rates, let alone cryptocurrence exchange rates! I think that one can use the algorithm for this purpose, but not in its vanilla autoregressive variant, and not without som adaptive behaviour.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+As it appears, the choice of the regularization depends on the problem that we a trying to solve with the factorization. 
 
 Suppose we just want to get a low-dimensional representation of our data, without the need to forecast or impute anything.
 
@@ -130,7 +189,7 @@ For forecasting, a series of grid searches was performed for regularization para
 * consider the last `horizon` of the remaining dataset unknown, predict for different combination of hyperparameters;
 * measure RMSE between actual and predicted values.
 
-The results were more or ledd inconclusive, as both coefficient sets and the resulting RMSEs variedwildly,depending what part of the dataset was used as unknown. But mostly the following combination fared quite well:
+The results were more or less inconclusive, as both coefficient sets and the resulting RMSEs variedwildly,depending what part of the dataset was used as unknown. But mostly the following combination fared quite well:
 
 `lambda_x: 100000;	 lambda_w: 100;	 lambda_f: 1; eta: 0.001;`
 
@@ -139,3 +198,5 @@ On the other hand, RMSE for totally different values
 `lambda_x: 0.001;	 lambda_w: 0.001;	 lambda_f: 1; eta: 0.0001;` weren't that different from those for the values above. 
 
 The question of hyperparameters choice needs more research, which we don't have time for, unfortunately.
+
+ -x 100 -w 0.01 -f 0.001 -e 0.1
