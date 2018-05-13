@@ -60,8 +60,18 @@ The resulting matrix is saved in CSV format again, each line corresponding to on
 this program comes with a dataset of cryptocurrencies exchanges rate, you can [download it here](https://drive.google.com/file/d/1qDxtI_sPWtIwhuJq92_1-3cv7ecJmsD0/view?usp=sharing).
 
 The files are in a rather peculiar format, you can `converter.py` script, included in this repo, to convert these files to CSV and combine a set of columns from different files into a single file. The script is written in Python 3 and requies Pandas.
-Usage
-`converter.py -i file_with_list -o output_file_name -b 2016.12.29.00.00.00 -e 2018.02.01.00.00.00 -c columns_list`
+
+Usage:
+`converter.py -i file_with_list -o output_file_name -b begin_datetime -e end_datetime -c columns_list`
+
+* `-i file_with_list` - path to a file containing paths to the files that you want to include un the table. An example is of such file is included, it will work if `data` directory is in the same directory that yor executive file is.
+* `-b begin_datetime` the time moment you want to start your dataset to start with. If cone cof the files doesnt cover this moment it will be excluded from the result and a corresponding message will be printed. THe datetime should be in the format
+ `yyyy.mm.dd.hh.mm.ss`. 
+* `-e end_datetime`. Same format as above, if the moment isnt covered, the file will be excluded.
+* `-c columns_list`. Column names that you want to include, separated by spaces. For example, `O C` .
+
+Example:
+`-i file_list -o converted.csv -b 2016.12.29.00.00.00 -e 2018.02.01.00.00.00 -c O C`
 
 
 
