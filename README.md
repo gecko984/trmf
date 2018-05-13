@@ -1,6 +1,8 @@
 # TRMF
 This is a C++ implementation of the basic Temporal Regularized Matrix Factorization (TRMF) algorithm proposed by Hsiang-Fu Yu, Nikhil Rao and Inderjit S. Dhillon in  [their 2016 NIPS paper](https://papers.nips.cc/paper/6160-temporal-regularized-matrix-factorization-for-high-dimensional-time-series-prediction). The implementation uses the Eigen 3 library for dense andsparse linear algebra routines.
 
+This program was created by Daniil Gulevskiy and Fedor Indukaev as aa course project for the Large Scale Machine Learning course at [Yandex school of data analysis](https://yandexdataschool.com/).
+
 ## About the TRMF algorithm
 The TRMF algorihm seeks to solve the problem of multiple time series forecasting, as this is known to be a hard problem for conventional forecasting algorithms such as ARIMA and DLM. Simple versions of these algorithms only work with each time series separately, thus disregarding the correlations among them. Multidimensional DLM model does exist, but scales very poorly with the dimension. Also these conventional models cannot handle missing values, so heuristics should be used to address missing data.
 
@@ -53,7 +55,13 @@ Just clone the repository and run `make`.
 
 The resulting matrix is saved in CSV format again, each line corresponding to one time series.
 
-BOB
+## Getting data
+
+this program comes with a dataset of cryptocurrencies exchanges rate, you can [download it here](https://drive.google.com/file/d/1qDxtI_sPWtIwhuJq92_1-3cv7ecJmsD0/view?usp=sharing).
+
+The files are in a rather peculiar format, you can `converter.py` script, included in this repo, to convert these files to CSV and combine a set of columns from different files into a single file. The script is written in Python 3 and requies Pandas.
+Usage
+`converter.py -i file_with_list -o output_file_name -b 2016.12.29.00.00.00 -e 2018.02.01.00.00.00 -c columns_list`
 
 
 
