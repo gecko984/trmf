@@ -51,19 +51,103 @@ template<class T>
 void PrintFunction(T object);
 void ReadCSV(char* filename, char delimeter, Mat& Y, Arr& Omega);
 bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_file_name, char* delimeter, int* rank,
-                 int* horizon, bool* match, std::set<int>* lags_set, bool* sparse, bool* keep_big, double* lambda_x, double* lambda_w, double* lambda_f, double* eta);
+                 int* horizon, int* T, bool* match, std::set<int>* lags_set, bool* sparse, bool* keep_big, double* lambda_x, double* lambda_w, double* lambda_f, double* eta);
 Mat GenerateOmega(int rows, int cols, double p_missing);
 void TestMatchByColumns();
 
-void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, bool match, double lambda_f, double lambda_w, double lambda_x, double eta,
+void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, int T, bool match, double lambda_f, double lambda_w, double lambda_x, double eta,
                double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, bool keep_big, Mat& F, Mat& X, Mat& W);
 
 int Run(int argc, char* argv[]);
+
+/////////////////////////////////////////////////////////////////////
+
+
+void FitCoeffs() {
+
+    char* input_file_name = "/home/fedor/data/converted.csv";
+    Mat Y_orig;
+    Arr Omega;
+    ReadCSV(input_file_name, ',', Y_orig, Omega);
+    std::cout << std::endl << Y_orig.rows() << " " << Y_orig.cols() << std::endl;
+    //Mat Y_orig = GetData();
+    Mat Y = Y_orig.leftCols(380);
+
+    int n = Y.rows();
+    int T = Y.cols();
+
+    std::set<int> lags_set = {1,2,3,4,5,6,7,14,21};
+
+    int k;
+    std::cout << std::endl << "input rank: ";
+    std::cin >> k;
+
+    int horizon = 1;
+    std::cout << std::endl << "input horizon: ";
+    std::cin >> horizon;
+
+    double p_missing;
+    std::cout << std::endl << "input prob of missing, 0<p<1: ";
+    std::cin >> p_missing;
+    //Mat Omega = GenerateOmega(Y.rows(), Y.cols()-horizon, p_missing);
+
+    Mat F_low(n, k);
+    Mat X_low(k, T-horizon);
+    Mat W_low(k, lags_set.size());
+    F_low.setRandom();
+    X_low.setRandom();
+    W_low.setRandom();
+
+    std::vector<double> lambda_x_set = {0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000};
+    std::vector<double> lambda_w_set = {0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000};
+    std::vector<double> lambda_f_set = {0.0001, 0.001, 0.01, 0.1, 1};
+    std::vector<double> eta_set = {0.0001, 0.001, 0.01, 0.1, 1};
+
+    double epsilon_X = 0.0001;
+    double epsilon_F = 0.0001;
+    int max_iter_X = 20;
+    int max_iter_F = 10;
+    int max_global_iter = 10;
+    bool sparse = false;
+    bool keep_big = false;
+    bool match = true;
+    double min_rmse = 10000000;
+    std::cout << std::endl;
+
+    for(auto lambda_x: lambda_x_set) {
+        for(auto lambda_w: lambda_w_set) {
+            for(auto lambda_f: lambda_f_set) {
+                for (auto eta: eta_set) {
+                    std::cout << "." << std::flush;
+                    Mat Y = Y_orig.leftCols(380);
+                    Vec means, scales;
+                    Standardize(Y, &means, &scales);
+                    Mat Y_block = Y.leftCols(Y.cols() - horizon);
+                    Arr Omega_block = Omega.leftCols(Y.cols() - horizon);
+                    Forecast(Y_block, Omega_block, lags_set, k, horizon, T, match, lambda_f, lambda_w, lambda_x, eta, epsilon_X, epsilon_F,
+                             max_iter_X, max_iter_F, max_global_iter, sparse, keep_big, F_low, X_low, W_low);
+                    //std::cout << std::endl << Y_block.cols()  << " " << Y.cols() << std::endl;
+                    double rmse = ((Y_block.rightCols(horizon) - Y.rightCols(horizon)).array() * (Y_block.rightCols(horizon) - Y.rightCols(horizon)).array()).mean();
+                    if (rmse<min_rmse) {
+                        min_rmse = rmse;
+                        std::cout << std::endl << "lambda_x: " << lambda_x << ";\t lambda_w: " << lambda_w << ";\t lambda_f: " << lambda_f << "; eta: " << eta << ";\t rmse:" << rmse;
+                    }
+                }
+            }
+        }
+    }
+    std::cout << std::endl;
+    //rank: 6 horizon 20 p_missing 0 lambda_x: 10000;  lambda_w: 1000;   lambda_f: 0.001; eta: 0.0001;   rmse:0.421484.
+    //                               lambda_x: 100000;   lambda_w: 1000;   lambda_f: 0.0001; eta: 0.01;  rmse:0.396559.
+}
+
+
 
 ///////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char* argv[] ) {
     // lambda_x: 100;	 lambda_w: 1;	 lambda_f: 10000; eta: 0.0001
+    //FitCoeffs();
     return Run(argc, argv);;
 }
 
@@ -80,20 +164,22 @@ int Run(int argc, char* argv[]) {
     char* output_file_name;
 
     char delimeter = ',';
-    int rank, horizon;
+    int rank, horizon, T = -1;
     bool sparse = false;
     bool keep_big = false;
     bool match = false;
     double lambda_x=1, lambda_w=1, lambda_f=1, eta=1;
 
     std::set<int> lags_set;
-    ParseParams(argc, argv, &input_file_name, &output_file_name, &delimeter, &rank, &horizon, &match, &lags_set, &sparse, &keep_big, &lambda_x, &lambda_w, &lambda_f, &eta);
+    ParseParams(argc, argv, &input_file_name, &output_file_name, &delimeter, &rank, &horizon, &T, &match, &lags_set, &sparse, &keep_big, &lambda_x, &lambda_w, &lambda_f, &eta);
     Mat Y;
     Arr Omega;
     ReadCSV(input_file_name, ',', Y, Omega);
+    //std::cout << std::endl << Y.rows() << " " << Y.cols() << std::endl;
+    //return 0;
 
     int n = Y.rows();
-    int T = Y.cols();
+    if (T == -1) T = Y.cols();
 
     double epsilon_X = 0.0001;
     double epsilon_F = 0.0001;
@@ -101,17 +187,18 @@ int Run(int argc, char* argv[]) {
     int max_iter_F = 10;
     int max_global_iter = 20;
 
-    Mat Y_pred = Y;//.leftCols(T - horizon);
-    Arr Omega_part = Omega;//.leftCols(T - horizon);
+    //Vec means, scales; // DELETE ME
+    //Standardize(Y, &means, &scales); // DELETE ME
 
-    Mat F(n, rank);
-    Mat X(rank, T-horizon);
+    Mat Y_pred = Y.leftCols(T);
+    Arr Omega_part = Omega.leftCols(T);
+
+    Mat F, X;
     Mat W(rank, lags_set.size());
-    Forecast(Y_pred, Omega_part, lags_set, rank, horizon, match, lambda_f, lambda_w, lambda_x, eta, epsilon_X, epsilon_F,
+    Forecast(Y_pred, Omega_part, lags_set, rank, horizon, T, match, lambda_f, lambda_w, lambda_x, eta, epsilon_X, epsilon_F,
              max_iter_X, max_iter_F, max_global_iter, sparse, keep_big, F, X, W);
 
-    Vec means, scales; // DELETE ME
-    Standardize(Y, &means, &scales); // DELETE ME
+
 
     std::ofstream file("bob.csv");
     file << Y.format(CSVFormat);
@@ -124,19 +211,17 @@ int Run(int argc, char* argv[]) {
 }
 
 
-void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, bool match, double lambda_f, double lambda_w, double lambda_x, double eta,
+void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, int T, bool match, double lambda_f, double lambda_w, double lambda_x, double eta,
                double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, bool keep_big, Mat& F, Mat& X, Mat& W) {
 
     int n = Y.rows();
-    int T = Y.cols();
 
     Vec means, scales;
-
     Standardize(Y, &means, &scales);
 
     Y = Y.array() * Omega;
 
-    Vec reference_column = Y.col(T - 1);
+    Vec reference_column = Y.col(Y.cols() - 1);
 
     Factorize(Y, Omega, lags_set, rank, lambda_f, lambda_w, lambda_x, eta, epsilon_X, epsilon_F, max_iter_X, max_iter_F, max_global_iter, sparse, F, X, W);
 
@@ -155,19 +240,65 @@ void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank,
         }
     }
 
-
     if(keep_big) {
         Y = F * X;
         if(match) MatchByColumn(reference_column, Y, T-1);
     } else {
         Mat X_pred = X.rightCols(horizon+1);
-        Y = F * X_pred;
-        if(match) MatchByColumn(reference_column, Y, 0);
-        Y = Y.rightCols(horizon);
+        Mat Y_pred = F * X_pred;
+        if(match) MatchByColumn(reference_column, Y_pred, 0);
+        Y = Y_pred.rightCols(horizon);
     }
-    //Destandardize(means, scales, Y); //UNCOMMENT ME
+    Destandardize(means, scales, Y); //UNCOMMENT ME
 }
 
+
+void Factorize(const Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, double lambda_f, double lambda_w, double lambda_x, double eta,
+               double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, Mat& F, Mat& X, Mat& W) {
+    /*
+    Given:
+        Y:         an n x T matrix, where each row is a time series and each column is a time tick. If the value [i,j] is missing, the corresponding Y[i,j] must be zero!
+        Omega:     an n x T mask matrix , which has 1 in position i,j if Y[i,j] is known, and 0 if it is unknown.
+        lags:      a set of integers, corresponding to the lags that the autoregressive model includes.
+        k:         the rank of decomposition
+        lambda_f:  regularization coefficient for Frobenius norm of F
+        lambda_w:  regularization coefficient for Frobenius norm of W
+        lambda_x:  regularization coefficient for the temporal regularizer T_{AR}(X)
+        eta:       regularization coefficient for Frobenius norm of X inside T_{AR}(X)
+
+        The problem being solved is:
+        ||P_{Omega}(Y - FX)||^2  + lambda_f ||F|| + lambda_w ||W|| + lambda_x (\sum_{r=1}^k T_{AR}(X_k)) -> min_{F, X, W}
+    */
+
+   std::vector<int> lags_vec(lags_set.begin(), lags_set.end());
+
+    // Create first approximations for F and X using the SVD decomposition
+
+   Eigen::BDCSVD<Mat> svd(Y, Eigen::ComputeThinU | Eigen::ComputeThinV);
+
+   F = svd.matrixU().leftCols(rank) * svd.singularValues().head(rank).asDiagonal();
+   X = svd.matrixV().leftCols(rank).transpose();
+
+    for(int iter=0; iter<max_global_iter; ++iter){
+        std::cout << "Iteration " << iter + 1 << std::endl;
+        Mat X_prev = X;
+        WStep(X, lags_vec, lambda_w, lambda_x, W);
+
+        if (sparse) {
+           XStepSparse(Y, Omega, W, F, lags_set, lambda_x, eta, epsilon_X, max_iter_X, X);
+        } else {
+           XStep(Y, Omega, W, F, lags_set, lambda_x, eta, epsilon_X, max_iter_X, X);
+        }
+
+        FStep(Y, X, Omega, lambda_f, epsilon_F, max_iter_F, F);
+
+        double diff_X_norm = (X - X_prev).norm();
+        //std::cout << "\t mean X diff sq " << diff_X_norm / (X.rows() * X.cols());
+        if ((diff_X_norm) < epsilon_X * X.rows() * X.cols()) {
+           return;
+        }
+    }
+}
 
 
 
@@ -194,6 +325,9 @@ void Destandardize(const Vec& means, const Vec& scales, Mat& M) {
 void MatchByColumn(const Vec& ref, Mat &Y, int col) {
     Vec col_values = Y.col(col);
     Y  = (Y.colwise() + ref).colwise() - col_values;
+    for(int row=0; row< Y.rows(); ++row) {
+        //std::cout << std::endl << col << "\t" << Y(row,col) << "\t" << ref(row) << std::endl;
+    }
 }
 
 
@@ -635,54 +769,6 @@ void XStepSparse(const Mat& Y, const Arr& Omega, const Mat& W, const Mat& F, con
 }
 
 
-void Factorize(const Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, double lambda_f, double lambda_w, double lambda_x, double eta,
-               double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, Mat& F, Mat& X, Mat& W) {
-    /*
-    Given:
-        Y:         an n x T matrix, where each row is a time series and each column is a time tick. If the value [i,j] is missing, the corresponding Y[i,j] must be zero!
-        Omega:     an n x T mask matrix , which has 1 in position i,j if Y[i,j] is known, and 0 if it is unknown.
-        lags:      a set of integers, corresponding to the lags that the autoregressive model includes.
-        k:         the rank of decomposition
-        lambda_f:  regularization coefficient for Frobenius norm of F
-        lambda_w:  regularization coefficient for Frobenius norm of W
-        lambda_x:  regularization coefficient for the temporal regularizer T_{AR}(X)
-        eta:       regularization coefficient for Frobenius norm of X inside T_{AR}(X)
-
-        The problem being solved is:
-        ||P_{Omega}(Y - FX)||^2  + lambda_f ||F|| + lambda_w ||W|| + lambda_x (\sum_{r=1}^k T_{AR}(X_k)) -> min_{F, X, W}
-    */
-
-   std::vector<int> lags_vec(lags_set.begin(), lags_set.end());
-
-    // Create first approximations for F and X using the SVD decomposition
-
-   Eigen::BDCSVD<Mat> svd(Y, Eigen::ComputeThinU | Eigen::ComputeThinV);
-
-   F = svd.matrixU().leftCols(rank) * svd.singularValues().head(rank).asDiagonal();
-   X = svd.matrixV().leftCols(rank).transpose();
-
-    for(int iter=0; iter<max_global_iter; ++iter){
-        std::cout << "Iteration " << iter + 1 << std::endl;
-        Mat X_prev = X;
-        WStep(X, lags_vec, lambda_w, lambda_x, W);
-
-        if (sparse) {
-           XStepSparse(Y, Omega, W, F, lags_set, lambda_x, eta, epsilon_X, max_iter_X, X);
-        } else {
-           XStep(Y, Omega, W, F, lags_set, lambda_x, eta, epsilon_X, max_iter_X, X);
-        }
-
-        FStep(Y, X, Omega, lambda_f, epsilon_F, max_iter_F, F);
-
-        double diff_X_norm = (X - X_prev).norm();
-        //std::cout << "\t mean X diff sq " << diff_X_norm / (X.rows() * X.cols());
-        if ((diff_X_norm) < epsilon_X * X.rows() * X.cols()) {
-           return;
-        }
-    }
-}
-
-
 template<class T>
 void PrintFunction(T object) {
     for(auto it = object.begin(); it != object.end(); it++) {
@@ -702,7 +788,7 @@ void ReadCSV(char* filename, char delimeter, Mat& Y, Arr& Omega) {
     std::string line;
     int row = 0;
     while (std::getline(input_stream, line)) {
-    std::replace(line.begin(), line.end(), delimeter, ' ');
+    //std::replace(line.begin(), line.end(), delimeter, ' '); // fixme
     Y.conservativeResize(row + 1, Y.cols());
     Omega.conservativeResize(row + 1, Y.cols());
 
@@ -710,8 +796,7 @@ void ReadCSV(char* filename, char delimeter, Mat& Y, Arr& Omega) {
     //std::cout << std::endl << line;
     std::string value;
     int col = 0;
-    while (std::getline(iss, value, ' ')) {
-        //std::cout << row << " " << col << "    ";
+    while (std::getline(iss, value, delimeter)) {
         if (Y.cols() < col + 1) {
             Y.conservativeResize(Y.rows(), col + 1);
             Omega.conservativeResize(Y.rows(), col + 1);
@@ -731,12 +816,11 @@ void ReadCSV(char* filename, char delimeter, Mat& Y, Arr& Omega) {
 }
 
 
-bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_file_name, char* delimeter, int* rank, int* horizon, bool* match,
+bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_file_name, char* delimeter, int* rank, int* horizon, int* T, bool* match,
                  std::set<int>* lags_set, bool* sparse, bool* keep_big, double* lambda_x, double* lambda_w, double* lambda_f, double* eta) {
     char* lags;
     int c;
-    // input, output, file format, delimeter, rank, horizon, sparse, lambda_x, lambda_w, lambda_f, lambda_e
-    while( ( c = getopt(argc, argv, "i:o:d:k:l:z:smbx:w:f:e:") ) != -1 ) {
+    while( ( c = getopt(argc, argv, "i:o:d:k:l:z:T:smbx:w:f:e:") ) != -1 ) {
         switch(c) {
             case 'i':
                 *input_file_name = optarg;
@@ -755,6 +839,9 @@ bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_f
                 break;
             case 'z':
                 if(optarg) *horizon = atoi(optarg);
+                break;
+            case 'T':
+                if(optarg) *T = atoi(optarg);
                 break;
              case 'm':
                 *match = true;

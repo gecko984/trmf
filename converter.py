@@ -16,6 +16,8 @@ parser.add_argument('-o', type=str, nargs='?')
 parser.add_argument('-b', type=str, nargs='?')
 parser.add_argument('-e', type=str, nargs='?')
 parser.add_argument('-c', type=str, nargs='+')
+parser.add_argument('-s', action='store_true')
+
 
 
 args = parser.parse_args()
@@ -25,6 +27,7 @@ output_fname = args.o
 begin = datetime.datetime.strptime(args.b, '%Y.%m.%d.%H.%M.%S')
 end = datetime.datetime.strptime(args.e, '%Y.%m.%d.%H.%M.%S')
 columns = args.c
+standardize = args.s
 
 tables = []
 index = []
@@ -60,7 +63,13 @@ for col in big_table.columns:
     if big_table[col].isnull().sum() > 0:
         print("Some time moments are missing from {}".format(col))
 
-big_table.T.to_csv(output_fname, na_rep='NaN', header=False, index=False)
+
+if standardize:
+    print("Standardizing..")
+    big_table=(big_table-big_table.mean(0))/big_table.std(0)
+
+
+big_table.T.to_csv(output_fname, na_rep='n', header=False, index=False)
 time_index_file_name = output_fname.split('.')[0] + '_time.csv'
 big_table.index.to_series().to_csv(time_index_file_name)
 
