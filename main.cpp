@@ -20,8 +20,7 @@ Eigen::IOFormat CSVFormat(Eigen::StreamPrecision, Eigen::DontAlignCols, ", ", "\
 void PrintVector(std::vector<int> v);
 void Standardize(Mat& M, Vec* means, Vec* scales);
 void Destandardize(const Vec& means, const Vec& scales, Mat& M);
-void Differentiate(Mat& Y, Vec* begin_values);
-void Integrate(const Vec& begin_values, Mat& Y);
+
 
 Vec Ridge(const Mat& A, const Vec& y, double alpha);
 Vec ChoRidge(const Mat& A, const Vec& y, double alpha);
@@ -42,7 +41,7 @@ void XStep(const Mat& Y, const Arr& Omega, const Mat& W, const Mat& F, const std
            double lambda_x, double eta, double epsilon_X, int max_iter_X, Mat& X);
 void XStepSparse(const Mat& Y, const Arr& Omega, const Mat& W, const Mat& F, const std::set<int> lags_set,
            double lambda_x, double eta, double epsilon, int max_iter_X, Mat& X);
-void Factorize(const Mat& Y, const Mat& Omega, const std::set<int>& lags_set, int rank, double lambda_f, double lambda_w, double lambda_x, double eta,
+void Factorize(const Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, double lambda_f, double lambda_w, double lambda_x, double eta,
                double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, Mat& F, Mat& X, Mat& W);
 
 void MatchByColumn(const Vec& ref, Mat &Y, int col);
@@ -56,7 +55,7 @@ bool ParseParams(int argc, char* argv[], char** input_file_name, char** output_f
 Mat GenerateOmega(int rows, int cols, double p_missing);
 void TestMatchByColumns();
 
-void Forecast(Mat& Y, const Mat& Omega, const std::set<int>& lags_set, int rank, int horizon, double lambda_f, double lambda_w, double lambda_x, double eta,
+void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, double lambda_f, double lambda_w, double lambda_x, double eta,
                double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, bool keep_big, Mat& F, Mat& X, Mat& W);
 
 int Run(int argc, char* argv[]);
@@ -73,7 +72,7 @@ int main(int argc, char* argv[] ) {
 int Run(int argc, char* argv[]) {
     if (argc < 10) {
         std::cerr << std::endl << "Usage: " << argv[0] <<
-                     " -i input_file -o prediction_file -t file type (CSV / crypto) -d delimeter -c how many columns to read (if csv) -k rank -h horizon -s (if you want to use sparse algorithm) -x lambda_x -w lambda_w -f lambda_f -e eta";
+                     " -i input_file -o prediction_file -d delimeter -k rank -h horizon -s (if you want to use sparse algorithm) -x lambda_x -w lambda_w -f lambda_f -e eta" << std::endl;
         return 1;
     }
 
@@ -103,7 +102,7 @@ int Run(int argc, char* argv[]) {
     int max_global_iter = 20;
 
     Mat Y_pred = Y;//.leftCols(T - horizon);
-    Mat Omega_part = Omega;//.leftCols(T - horizon);
+    Arr Omega_part = Omega;//.leftCols(T - horizon);
 
     Mat F(n, rank);
     Mat X(rank, T-horizon);
@@ -123,7 +122,7 @@ int Run(int argc, char* argv[]) {
 }
 
 
-void Forecast(Mat& Y, const Mat& Omega, const std::set<int>& lags_set, int rank, int horizon, double lambda_f, double lambda_w, double lambda_x, double eta,
+void Forecast(Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, int horizon, double lambda_f, double lambda_w, double lambda_x, double eta,
                double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, bool keep_big, Mat& F, Mat& X, Mat& W) {
 
     int n = Y.rows();
@@ -132,6 +131,8 @@ void Forecast(Mat& Y, const Mat& Omega, const std::set<int>& lags_set, int rank,
     Vec means, scales;
 
     Standardize(Y, &means, &scales);
+
+    Y = Y.array() * Omega;
 
     Vec reference_column = Y.col(T - 1);
 
@@ -310,7 +311,7 @@ void WStep(const Mat& X, std::vector<int> lags, double lambda_w, double lambda_x
                 M(i - L, l - 1 -j) = X(row, i - lags[j]);
             }
         }
-        W.row(row) = Ridge(M, y, alpha).transpose();
+        W.row(row) = ChoRidge(M, y, alpha).transpose();
     }
 }
 
@@ -631,7 +632,7 @@ void XStepSparse(const Mat& Y, const Arr& Omega, const Mat& W, const Mat& F, con
 }
 
 
-void Factorize(const Mat& Y, const Mat& Omega, const std::set<int>& lags_set, int rank, double lambda_f, double lambda_w, double lambda_x, double eta,
+void Factorize(const Mat& Y, const Arr& Omega, const std::set<int>& lags_set, int rank, double lambda_f, double lambda_w, double lambda_x, double eta,
                double epsilon_X, double epsilon_F, int max_iter_X, int max_iter_F, int max_global_iter, bool sparse, Mat& F, Mat& X, Mat& W) {
     /*
     Given:
