@@ -40,7 +40,7 @@ Just clone the repository and run `make` in the directory with the source files.
 ## Usage
 `./tmrf -i input_file -o prediction_file -d delimeter -k rank -z horizon -l lags_set -s (if you want to use sparse algorithm) -m (if you want to match predicted series to last known values of true series) -b (if you want the program to to output the big recovered matrix rather than just the predicted values) -x lambda_x -w lambda_w -f lambda_f -e eta`
 
-* `-i input_file` - location of the input file. The file should be in CSV format with one line corresponding to one time series. Missing values can be marked by any non-numeric sequence of caracters, for example `NaN`, `#nan` or `bob`;
+* `-i input_file` - location of the input file. The file should be in CSV format with one line corresponding to one time series. Missing values can be marked by any non-numeric character, like `#` or 'n';
 * `-o prediction_file` - where to write the predictions;
 * `-d delimeter` - a character separatimg the values in the input file. For example `-d ,`;
 * `-k rank` - rank of the factorization;
@@ -150,6 +150,19 @@ Conclusion:
 * The TRMF is very finicky about the choice of hyperparameters. 
 
 * The TRMF is not adaptive enough for such volatile data as exchange rates, let alone cryptocurrence exchange rates! I think that one can use the algorithm for this purpose, but not in its vanilla autoregressive variant, and not without som adaptive behaviour.
+
+* For some more regular data maybe TRMF can be enough.
+
+## Comparison to other method.
+
+We tried to use a method, suggested by Ilya Trofimov, where the time prediction problem is transformed into a supervised learning problem. The idea is that for a fixed lag set, object-target pairs are formed, where target is series[i], and the object [series[i-lag1], ... ,series[i-lagL], series_id]. This dataset is then fed into catboost with series-id as a categorical feature. I have no idea why, but catboost just would not train on such data, stating
+
+`Training has stopped (degenerate solution on iteration 0, probably too small l2-regularization, try to increase it)`.
+
+I tried chainging the l2 regularization coefficient, taking less tuples into the dataset, changing th learning rate and downgrading catboost - nothing helped. It would train with no more than 125 data points, and 126 points already cause the error above.
+
+We hope we will overcome this difficulty and add a meaninful comparison to this report later
+
 
 
 
